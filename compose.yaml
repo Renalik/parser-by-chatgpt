@@ -1,0 +1,21 @@
+services:
+  parser:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      DGIS_API_KEY: ${DGIS_API_KEY:-}
+      DATABASE_URL: sqlite:///./data/parser.db
+      APP_PASSWORD: ${APP_PASSWORD:-}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      RETENTION_DAYS: ${RETENTION_DAYS:-7}
+    volumes:
+      - parser-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  parser-data:
