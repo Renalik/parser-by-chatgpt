@@ -9,7 +9,7 @@ LIST_SCRIPT = (
     + COMMON
     + r"""
 const links=[...document.querySelectorAll('a[href]')].filter(visible).map(a=>({url:a.href,name:(a.innerText||a.getAttribute('aria-label')||'').trim()})).filter(a=>/^https:\/\/2gis\.ru\/[a-z0-9_-]+\/firm\/\d+/.test(a.url));
-return {blocked,url:location.href,links:links.map(a=>({...a,url:a.url.split('?')[0]})),empty:/ничего не найдено|не нашли организаций|по вашему запросу ничего/i.test(text)};
+return {blocked,url:location.href,links:links.map(a=>({...a,url:a.url.match(/^https:\/\/2gis\.ru\/[^/]+\/firm\/\d+/)[0]})),empty:/ничего не найдено|не нашли организаций|по вашему запросу ничего/i.test(text)};
 })()"""
 )
 SCROLL_SCRIPT = (
@@ -59,6 +59,6 @@ const categoryLinks=[...(h1.parentElement?.parentElement?.querySelectorAll('a[hr
 const reviewLine=lines.find(s=>/^\d[\d\s]*\s+отзыв(ов|а)?$/i.test(s));
 let rating=ratingNode?.innerText||null;
 if(!rating){const idx=lines.findIndex(s=>/^\d[\d\s]*\s+оцен(ок|ки|ка)$/i.test(s));if(idx>0&&/^[0-5]([.,]\d)?$/.test(lines[idx-1]))rating=lines[idx-1];}
-return {blocked,ready:document.readyState!=='loading',name:h1.innerText.trim(),category:categoryLinks[0]?.innerText.trim()||null,url:location.href,links,address,rating,reviews:reviewsNode?.innerText||reviewsLink?.innerText||reviewLine||null,websiteAbsentExplicit:/сайт не указан|сайта нет/i.test(text),hasCollapsedPhone:[...document.querySelectorAll('button,a,div[role="button"]')].filter(visible).some(e=>/^показать (телефон|номер)/i.test(e.innerText||''))};
+return {blocked,ready:document.readyState!=='loading',name:h1.innerText.trim(),category:categoryLinks[0]?.innerText.trim()||null,url:location.href,links,address,rating,reviews:reviewsNode?.innerText||reviewsLink?.innerText||reviewLine||null,websiteAbsentExplicit:lines.some(s=>/^(сайт не указан|сайта нет)[.!]?$/i.test(s)),hasCollapsedPhone:[...document.querySelectorAll('button,a,div[role="button"]')].filter(visible).some(e=>/^показать (телефон|номер)/i.test(e.innerText||''))};
 })()"""
 )

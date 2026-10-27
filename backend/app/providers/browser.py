@@ -275,7 +275,12 @@ class BrowserProvider(DataProvider):
                 if error.paused:
                     raise
                 continue
-            if ready(data):
+            actual = urlsplit(data.get("url", ""))
+            expected = urlsplit(url)
+            same_page = actual.hostname == expected.hostname and unquote(
+                actual.path
+            ).rstrip("/") == unquote(expected.path).rstrip("/")
+            if same_page and ready(data):
                 return data
         raise ProviderError(
             "Карточка или выдача не загрузилась. Проверьте браузер и продолжите поиск.",

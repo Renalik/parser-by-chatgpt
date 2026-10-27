@@ -31,6 +31,7 @@ async def lifespan(app):
         else:
             # Browser mode is the desktop default; never spend API quota on startup.
             from .providers.browser import capabilities
+
             manager.mode = "browser"
             manager.caps = capabilities()
     try:

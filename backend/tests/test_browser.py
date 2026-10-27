@@ -100,3 +100,36 @@ async def test_cancel_waits_for_browser_action():
     with pytest.raises(asyncio.CancelledError):
         await task
     assert finished.is_set()
+
+
+def test_navigation_does_not_read_previous_card():
+    from backend.app.providers.browser import BrowserProvider
+
+    class Tab:
+        def __init__(self):
+            self.reads = 0
+
+        def call(self, *args):
+            pass
+
+        def navigate(self, url):
+            pass
+
+        def evaluate(self, script):
+            if script == "location.href":
+                return "https://2gis.ru/moscow/firm/100"
+            self.reads += 1
+            return {
+                "url": "https://2gis.ru/moscow/firm/"
+                + ("100" if self.reads == 1 else "200"),
+                "name": "Name",
+                "ready": True,
+            }
+
+    tab = Tab()
+    provider = BrowserProvider()
+    provider.wait = lambda t: None
+    card = provider.load(
+        tab, "https://2gis.ru/moscow/firm/200", "script", lambda d: d["ready"]
+    )
+    assert tab.reads == 2 and card["url"].endswith("/200")

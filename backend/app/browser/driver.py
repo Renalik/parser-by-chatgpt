@@ -194,10 +194,24 @@ class BrowserService:
                     self.tabs.pop(kind).close()
             result = None
             if kind == "search":
-                targets=local_json(f"http://127.0.0.1:{self.port}/json/list")
-                result=next((t for t in targets if t.get("type")=="page" and t.get("webSocketDebuggerUrl") and (t.get("url","").startswith("https://2gis.ru") or t.get("url")=="about:blank")),None)
+                targets = local_json(f"http://127.0.0.1:{self.port}/json/list")
+                result = next(
+                    (
+                        t
+                        for t in targets
+                        if t.get("type") == "page"
+                        and t.get("webSocketDebuggerUrl")
+                        and (
+                            t.get("url", "").startswith("https://2gis.ru")
+                            or t.get("url") == "about:blank"
+                        )
+                    ),
+                    None,
+                )
             if result is None:
-                result = local_json(f"http://127.0.0.1:{self.port}/json/new?about:blank",method="PUT")
+                result = local_json(
+                    f"http://127.0.0.1:{self.port}/json/new?about:blank", method="PUT"
+                )
             tab = Tab(result["webSocketDebuggerUrl"])
             self.tabs[kind] = tab
             return tab
