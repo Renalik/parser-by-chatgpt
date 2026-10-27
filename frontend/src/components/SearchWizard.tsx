@@ -30,7 +30,7 @@ export default function SearchWizard({
   templates,
   standalone,
 }: any) {
-  const { spec, setSpec } = useStore();
+  const { spec, setSpec, setPage } = useStore();
   const [step, setStep] = useState(0),
     [city, setCity] = useState(""),
     [suggestions, setSuggestions] = useState<any[]>([]),
@@ -49,6 +49,43 @@ export default function SearchWizard({
       categories: spec.categories.includes(c)
         ? spec.categories.filter((v) => v !== c)
         : [...spec.categories, c],
+    });
+  const blockers: {
+    id: string;
+    message: string;
+    action?: string;
+    resolve?: () => void;
+  }[] = [];
+  if (busy)
+    blockers.push({
+      id: "busy",
+      message: "Дождитесь завершения текущей проверки или запроса.",
+    });
+  if (!meta.capabilities.connected)
+    blockers.push({
+      id: "source",
+      message:
+        meta.mode === "browser"
+          ? "Браузерный источник не готов. В настройках нажмите «Использовать браузер 2ГИС». Нужен установленный Edge или Chrome."
+          : "Источник данных не подключён. Выберите браузерный режим или проверьте подключение в настройках.",
+      action: "Открыть настройки",
+      resolve: () => setPage("Настройки"),
+    });
+  if (!spec.cities.length)
+    blockers.push({
+      id: "city",
+      message:
+        "Выберите город: введите название, нажмите «Найти», затем нажмите на город в списке результатов.",
+      action: "Выбрать город",
+      resolve: () => setStep(0),
+    });
+  if (!spec.categories.length)
+    blockers.push({
+      id: "category",
+      message:
+        "Отметьте галочкой хотя бы одну категорию. Ввод названия в строку поиска категории не выбирает её.",
+      action: "Выбрать категории",
+      resolve: () => setStep(1),
     });
   return (
     <>
@@ -519,6 +556,42 @@ export default function SearchWizard({
               </div>
             </>
           )}
+          {step === 3 && (
+            <div
+              id="search-readiness"
+              className="launch-readiness"
+              role="status"
+              aria-live="polite"
+            >
+              <Info size={17} />
+              <div>
+                <strong>
+                  {blockers.length
+                    ? "Что нужно для запуска"
+                    : "Всё готово — можно начинать поиск"}
+                </strong>
+                {blockers.length > 0 && (
+                  <ul>
+                    {blockers.map((reason) => (
+                      <li key={reason.id}>
+                        <span>{reason.message}</span>
+                        {reason.action && (
+                          <button
+                            type="button"
+                            className="text-button"
+                            onClick={reason.resolve}
+                          >
+                            {reason.action}
+                            <ArrowRight size={13} />
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
           <div className="wizard-footer">
             <Button disabled={step === 0} onClick={() => setStep(step - 1)}>
               <ArrowLeft size={15} />
@@ -532,12 +605,8 @@ export default function SearchWizard({
             ) : (
               <Button
                 primary
-                disabled={
-                  busy ||
-                  !spec.cities.length ||
-                  !spec.categories.length ||
-                  !meta.capabilities.connected
-                }
+                disabled={blockers.length > 0}
+                aria-describedby="search-readiness"
                 onClick={() =>
                   run(async () => {
                     const j = await send("/jobs", { ...spec, mode: meta.mode });

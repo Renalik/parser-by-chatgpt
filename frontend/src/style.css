@@ -1472,3 +1472,41 @@ summary {
     animation: none !important;
   }
 }
+
+.launch-readiness {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fafafa;
+  font-size: 11px;
+  line-height: 1.65;
+}
+.launch-readiness > svg {
+  margin-top: 2px;
+}
+.launch-readiness strong {
+  font-weight: 500;
+}
+.launch-readiness ul {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  color: #666;
+}
+.launch-readiness li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+.launch-readiness .text-button {
+  text-decoration: underline;
+  color: #171717;
+}
