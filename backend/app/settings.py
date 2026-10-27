@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     app_password: str = ""
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     retention_days: int = 7
+    desktop_mode: bool = False
+    desktop_data_dir: str = ""
 
 
 settings = Settings()

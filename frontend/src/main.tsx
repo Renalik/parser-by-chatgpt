@@ -65,13 +65,10 @@ function App() {
   }, []);
   useEffect(() => {
     refresh().catch((e) => setNotice(e.message));
-    const timer = setInterval(
-      () =>
-        api("/jobs")
-          .then(setJobs)
-          .catch(() => {}),
-      1500,
-    );
+    const timer = setInterval(() => {
+      api("/jobs").then(setJobs).catch(() => {});
+      api("/meta").then(setMeta).catch(() => {});
+    }, 1500);
     return () => clearInterval(timer);
   }, [refresh]);
   const run = async (fn: () => Promise<any>) => {

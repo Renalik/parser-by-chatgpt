@@ -53,8 +53,9 @@ export default function SettingsPage({ meta, run, busy }: any) {
               />
             </label>
             <p className="muted">
-              Ключ из формы хранится в памяти до перезапуска. Для постоянного
-              подключения задайте DGIS_API_KEY в .env на сервере.
+              {meta.desktop
+                ? "Ключ сохраняется на этом компьютере в защищённом хранилище Windows и используется при следующем запуске."
+                : "Ключ из формы хранится в памяти до перезапуска. Для постоянного подключения задайте DGIS_API_KEY в .env на сервере."}
             </p>
             <div className="inline">
               <Button

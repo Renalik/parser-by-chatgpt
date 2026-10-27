@@ -1,4 +1,5 @@
 import base64, secrets
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -21,8 +22,33 @@ from .providers.base import ProviderError
 @asynccontextmanager
 async def lifespan(app):
     manager.recover()
-    yield
-    await manager.shutdown()
+    reconnect = None
+    if settings.desktop_mode:
+        saved = db.get("desktop-mode") or {}
+        if saved.get("mode") == "demo":
+            manager.mode = "demo"
+            manager.caps = await manager.provider("demo").diagnose()
+        elif manager.key:
+
+            async def restore_connection():
+                try:
+                    manager.caps = await manager.provider("live").diagnose()
+                except ProviderError:
+                    manager.caps = {
+                        "connected": False,
+                        "messages": [
+                            "Не удалось проверить сохранённый ключ. Повторите проверку в настройках."
+                        ],
+                    }
+
+            reconnect = asyncio.create_task(restore_connection())
+    try:
+        yield
+    finally:
+        if reconnect:
+            reconnect.cancel()
+            await asyncio.gather(reconnect, return_exceptions=True)
+        await manager.shutdown()
 
 
 app = FastAPI(title="2GIS Business Parser", lifespan=lifespan)
@@ -116,6 +142,7 @@ def meta():
         "categories": PRESETS,
         "mode": manager.mode,
         "has_key": bool(manager.key),
+        "desktop": settings.desktop_mode,
         "capabilities": manager.caps,
         "license": config(),
         "limitations": [
@@ -139,6 +166,18 @@ async def connect(body: Connection):
     caps = await (
         DemoProvider() if body.mode == "demo" else DgisProvider(candidate_key)
     ).diagnose()
+    if settings.desktop_mode:
+        if body.mode == "live" and body.api_key is not None:
+            from desktop.credentials import save_api_key
+
+            try:
+                save_api_key(candidate_key, Path(settings.desktop_data_dir))
+            except OSError:
+                raise HTTPException(
+                    500,
+                    "Windows не удалось сохранить ключ в защищённом хранилище. Повторите попытку.",
+                ) from None
+        db.put("desktop", "desktop-mode", {"mode": body.mode})
     manager.key = candidate_key
     manager.mode = body.mode
     manager.caps = caps
