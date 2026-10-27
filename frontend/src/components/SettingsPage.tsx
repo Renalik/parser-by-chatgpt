@@ -26,11 +26,45 @@ export default function SettingsPage({ meta, run, busy }: any) {
       <div className="settings-layout">
         <div>
           <div className="panel">
+            <h2>
+              <Play size={19} /> Браузерный режим · без API-ключа
+            </h2>
+            <p>
+              Программа открывает установленный Edge или Chrome, прокручивает
+              выдачу 2ГИС и переносит сведения из видимых карточек под ваши
+              фильтры. Используйте режим в пределах полученного разрешения на
+              сбор.
+            </p>
+            <div className="inline">
+              <Button
+                primary
+                disabled={busy}
+                onClick={() =>
+                  run(() => send("/connection", { mode: "browser" }))
+                }
+              >
+                <Play size={15} />
+                Использовать браузер 2ГИС
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={() => run(() => send("/browser/open", {}))}
+              >
+                Открыть окно 2ГИС <ExternalLink size={14} />
+              </Button>
+            </div>
+            <p className="muted">
+              При проверке CAPTCHA или ограничении доступа задача
+              приостанавливается. Выполните требуемое действие в браузере и
+              нажмите «Продолжить». Недоступные контакты остаются неизвестными.
+            </p>
+          </div>
+          <div className="panel mt">
             <div className="section-heading">
               <div>
                 <h2>
                   <KeyRound size={19} />
-                  Подключение 2ГИС
+                  API 2ГИС · дополнительный источник
                 </h2>
                 <p>Ключ передаётся только серверу приложения и API 2ГИС.</p>
               </div>
@@ -82,7 +116,7 @@ export default function SettingsPage({ meta, run, busy }: any) {
                 Открыть деморежим
               </Button>
             </div>
-            {busy && <p role="status">Проверка доступа к полям API…</p>}
+            {busy && <p role="status">Проверка подключения к источнику…</p>}
             {meta.capabilities.messages?.map((m: string) => (
               <p className="diagnostic" key={m}>
                 <Info size={14} />

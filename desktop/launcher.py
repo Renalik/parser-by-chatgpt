@@ -8,6 +8,7 @@ import json
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+import queue
 from pathlib import Path
 import socket
 import sys
@@ -212,6 +213,8 @@ def graphical_main(directory: Path):
     root.configure(bg="#ffffff")
     root.option_add("*Font", ("Segoe UI", 10))
     server = None
+    tray = None
+    actions = queue.Queue()
     try:
         configure(directory)
         tk.Label(
@@ -240,6 +243,91 @@ def graphical_main(directory: Path):
             bg="#ffffff",
             fg="#888888",
         ).pack()
+        from desktop.tray import TrayIcon
+
+        tray = TrayIcon(actions.put)
+        tray_available = tray.start()
+        if tray_available:
+            root.protocol("WM_DELETE_WINDOW", root.withdraw)
+            ttk.Button(buttons, text="Свернуть в трей", command=root.withdraw).pack(
+                side="left", padx=5
+            )
+
+        def control(action):
+            try:
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                headers = {}
+                password = os.environ.get("APP_PASSWORD", "")
+                if password:
+                    import base64
+
+                    headers["Authorization"] = (
+                        "Basic "
+                        + base64.b64encode(("desktop:" + password).encode()).decode()
+                    )
+                with opener.open(
+                    urllib.request.Request(server.url + "/api/jobs", headers=headers),
+                    timeout=10,
+                ) as response:
+                    jobs = json.load(response)
+                if action == "resume" and any(
+                    j["status"] in ("queued", "running") for j in jobs
+                ):
+                    return
+                statuses = (
+                    ("running", "queued")
+                    if action == "pause"
+                    else ("paused", "stopped")
+                )
+                target = next((j for j in jobs if j["status"] in statuses), None)
+                if target:
+                    request = urllib.request.Request(
+                        server.url + "/api/jobs/" + target["id"] + "/control/" + action,
+                        data=b"{}",
+                        headers={**headers, "Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with opener.open(request, timeout=10):
+                        pass
+            except Exception:
+                logging.warning("Tray control request failed")
+
+        def poll_actions():
+            try:
+                while True:
+                    action = actions.get_nowait()
+                    if action == "exit":
+                        root.destroy()
+                        return
+                    if action == "window":
+                        root.deiconify()
+                        root.lift()
+                    if action == "2gis":
+
+                        def open_source():
+                            from backend.app.browser.driver import browser_service
+
+                            try:
+                                browser_service.open_home()
+                            except Exception:
+                                webbrowser.open("https://2gis.ru")
+
+                        threading.Thread(target=open_source, daemon=True).start()
+                    if action == "open" and server and server.server.started:
+                        webbrowser.open(server.url)
+                    if (
+                        action in ("pause", "resume")
+                        and server
+                        and server.server.started
+                    ):
+                        threading.Thread(
+                            target=control, args=(action,), daemon=True
+                        ).start()
+            except queue.Empty:
+                pass
+            root.after(150, poll_actions)
+
+        root.after(150, poll_actions)
         root.update()
         if not (resource_root() / "frontend" / "dist" / "index.html").exists():
             raise RuntimeError("В сборке отсутствует интерфейс приложения")
@@ -262,6 +350,8 @@ def graphical_main(directory: Path):
                     state="normal", command=lambda: webbrowser.open(server.url)
                 )
                 webbrowser.open(server.url)
+                if tray_available:
+                    root.after(500, root.withdraw)
             else:
                 root.after(100, ready)
 
@@ -277,6 +367,8 @@ def graphical_main(directory: Path):
         )
         return 1
     finally:
+        if tray:
+            tray.stop()
         if server:
             server.stop()
         (directory / "runtime.json").unlink(missing_ok=True)
@@ -346,12 +438,65 @@ def smoke_test(result_path: Path):
                             not in (directory / "api-key.dpapi").read_bytes()
                         )
                         credential_test = "passed"
+                    tray_test = "not-applicable"
+                    if os.name == "nt":
+                        from desktop.tray import TrayIcon
+
+                        tray = TrayIcon(lambda action: None)
+                        try:
+                            tray.start()
+                            assert tray.window_created
+                            tray_test = "passed"
+                        finally:
+                            tray.stop()
+                        assert not tray.thread.is_alive()
+                    browser_test = "not-requested"
+                    if os.getenv("DGIS_BROWSER_TEST_PORT"):
+                        import asyncio
+                        from backend.app.browser.driver import BrowserService
+                        from backend.app.providers.browser import BrowserProvider
+                        from backend.app.models import SearchSpec
+
+                        service = BrowserService()
+                        service.port = int(os.environ["DGIS_BROWSER_TEST_PORT"])
+                        provider = BrowserProvider(service)
+                        provider.wait = lambda seconds: time.sleep(min(seconds, 0.15))
+                        specification = SearchSpec(
+                            mode="browser",
+                            cities=[{"name": "Москва", "region_id": "moscow"}],
+                            categories=["Кафе"],
+                        )
+
+                        async def browser_check():
+                            rows = []
+                            for page in range(1, 6):
+                                found, more = await provider.page(
+                                    specification, specification.cities[0], "Кафе", page
+                                )
+                                rows += found
+                                if not more:
+                                    break
+                            assert [o.id for o in rows] == ["101", "102", "103"]
+                            assert all(
+                                o.phone == "+70000000000"
+                                and o.website.rstrip("/") == "https://example.org"
+                                and o.telegram == "https://t.me/example"
+                                for o in rows
+                            )
+
+                        try:
+                            asyncio.run(browser_check())
+                            browser_test = "passed"
+                        finally:
+                            service.close()
                     report = {
                         "ok": True,
                         "matched": 10,
                         "xlsx_rows": 10,
                         "xlsx_columns": 2,
                         "credential_storage": credential_test,
+                        "tray_window": tray_test,
+                        "browser_cdp": browser_test,
                         "frozen": bool(getattr(sys, "frozen", False)),
                     }
             finally:

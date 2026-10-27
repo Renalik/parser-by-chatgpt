@@ -28,20 +28,11 @@ async def lifespan(app):
         if saved.get("mode") == "demo":
             manager.mode = "demo"
             manager.caps = await manager.provider("demo").diagnose()
-        elif manager.key:
-
-            async def restore_connection():
-                try:
-                    manager.caps = await manager.provider("live").diagnose()
-                except ProviderError:
-                    manager.caps = {
-                        "connected": False,
-                        "messages": [
-                            "Не удалось проверить сохранённый ключ. Повторите проверку в настройках."
-                        ],
-                    }
-
-            reconnect = asyncio.create_task(restore_connection())
+        else:
+            # Browser mode is the desktop default; never spend API quota on startup.
+            from .providers.browser import capabilities
+            manager.mode = "browser"
+            manager.caps = capabilities()
     try:
         yield
     finally:
@@ -101,7 +92,9 @@ def require_job(id):
 
 def summary(job):
     return {
-        k: v for k, v in job.items() if k not in ("results", "seen", "resolved")
+        k: v
+        for k, v in job.items()
+        if k not in ("results", "seen", "resolved", "browser_state")
     } | {"matched": len(job["results"])}
 
 
@@ -114,7 +107,7 @@ def config():
 
 
 class Connection(BaseModel):
-    mode: Literal["live", "demo"] = "live"
+    mode: Literal["live", "demo", "browser"] = "browser"
     api_key: str | None = Field(default=None, max_length=1024)
 
 
@@ -161,10 +154,13 @@ async def connect(body: Connection):
         raise HTTPException(409, "Сначала приостановите активные задачи")
     from .providers.dgis import DgisProvider
     from .providers.demo import DemoProvider
+    from .providers.browser import BrowserProvider
 
     candidate_key = body.api_key.strip() if body.api_key is not None else manager.key
     caps = await (
-        DemoProvider() if body.mode == "demo" else DgisProvider(candidate_key)
+        BrowserProvider()
+        if body.mode == "browser"
+        else DemoProvider() if body.mode == "demo" else DgisProvider(candidate_key)
     ).diagnose()
     if settings.desktop_mode:
         if body.mode == "live" and body.api_key is not None:
@@ -184,6 +180,13 @@ async def connect(body: Connection):
     return caps
 
 
+@app.post("/api/browser/open")
+async def open_browser():
+    from .browser.driver import browser_service
+
+    return await asyncio.to_thread(browser_service.open_home)
+
+
 @app.put("/api/license")
 def license(body: License):
     db.put("settings", "settings", body.model_dump())
@@ -192,6 +195,29 @@ def license(body: License):
 
 @app.get("/api/regions")
 async def regions(q: str = Query(min_length=2, max_length=100)):
+    if manager.mode == "browser":
+        from .providers.browser import CITIES
+        from urllib.parse import urlsplit
+        import re
+
+        parsed = urlsplit(q)
+        if parsed.scheme == "https" and parsed.hostname == "2gis.ru":
+            slug = parsed.path.strip("/").split("/")[0]
+            if re.fullmatch(r"[a-z0-9_-]{1,80}", slug):
+                return [
+                    {
+                        "id": slug,
+                        "name": next(
+                            (name for name, value in CITIES.items() if value == slug),
+                            slug,
+                        ),
+                    }
+                ]
+        return [
+            {"id": slug, "name": name}
+            for name, slug in CITIES.items()
+            if q.casefold() in name.casefold()
+        ]
     if manager.mode == "demo":
         return [
             {"id": x, "name": x}
@@ -210,7 +236,7 @@ async def regions(q: str = Query(min_length=2, max_length=100)):
 
 @app.get("/api/categories")
 async def categories(q: str, region_id: str):
-    if manager.mode == "demo":
+    if manager.mode in ("demo", "browser"):
         return [{"id": x, "name": x} for x in PRESETS if q.casefold() in x.casefold()]
     return await manager.provider("live").categories(q, region_id)
 
@@ -226,6 +252,28 @@ def jobs():
 
 @app.post("/api/jobs", status_code=201)
 async def create(spec: SearchSpec):
+    if spec.mode == "browser":
+        from .providers.browser import BROWSER_FIELDS, search_url
+
+        if manager.mode != "browser" or not manager.caps.get("connected"):
+            raise HTTPException(
+                400,
+                "Выберите браузерный режим в настройках и проверьте наличие Edge или Chrome",
+            )
+        if spec.point or spec.radius:
+            raise HTTPException(
+                400,
+                "Точный радиус в браузерном режиме не поддерживается. Используйте поиск по городу.",
+            )
+        missing = fields_used(spec.filters) - BROWSER_FIELDS
+        if missing:
+            raise HTTPException(
+                400,
+                "Не поддерживаются браузерным источником: "
+                + ", ".join(sorted(missing)),
+            )
+        for city in spec.cities:
+            search_url(city, spec.categories[0], spec.keyword)
     if spec.mode == "live":
         if (
             manager.mode != "live"

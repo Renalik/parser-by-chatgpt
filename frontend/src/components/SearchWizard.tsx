@@ -167,6 +167,13 @@ export default function SearchWizard({
                   ))}
                 </div>
               )}
+              {meta.mode === "browser" && (
+                <p className="muted">
+                  Если города нет в списке, вставьте адрес его раздела, например
+                  https://2gis.ru/irkutsk. Точный радиус в браузерном режиме
+                  недоступен.
+                </p>
+              )}
               <div className="chips">
                 {spec.cities.map((c) => (
                   <span className="chip" key={c.region_id}>
@@ -192,6 +199,7 @@ export default function SearchWizard({
                   Центр поиска · необязательно
                   <input
                     placeholder="37.6176,55.7558 — долгота,широта"
+                    disabled={meta.mode === "browser"}
                     value={spec.point || ""}
                     onChange={(e) => setSpec({ point: e.target.value || null })}
                   />
@@ -200,6 +208,7 @@ export default function SearchWizard({
                   Радиус, км
                   <input
                     type="number"
+                    disabled={meta.mode === "browser"}
                     min="0.001"
                     max="40"
                     value={spec.radius ? spec.radius / 1000 : ""}
@@ -575,7 +584,11 @@ export default function SearchWizard({
           </div>
           <div className="summary-foot">
             <Database size={16} />
-            {meta.mode === "demo" ? "Тестовые данные" : "Официальный API 2ГИС"}
+            {meta.mode === "demo"
+              ? "Тестовые данные"
+              : meta.mode === "browser"
+                ? "Браузер 2ГИС · без API"
+                : "Официальный API 2ГИС"}
           </div>
         </div>
       </div>

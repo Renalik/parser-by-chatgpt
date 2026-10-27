@@ -8,6 +8,7 @@ on:
       - 'backend/requirements*'
       - 'frontend/**'
       - '.github/workflows/windows-exe.yml'
+      - 'scripts/browser-fixture/**'
   workflow_dispatch:
 permissions:
   contents: write
@@ -46,15 +47,29 @@ jobs:
       - name: Test packaged executable
         shell: python
         run: |
-          import json, pathlib, subprocess, tempfile, hashlib
+          import json, pathlib, subprocess, tempfile, hashlib, os, time, urllib.request
           executable = pathlib.Path('dist/2GIS-Business-Parser.exe').resolve()
           with tempfile.TemporaryDirectory(prefix='parser-build-check-') as folder:
               report = pathlib.Path(folder) / 'result.json'
-              subprocess.run([str(executable), '--smoke-test', '--result', str(report)], check=True, timeout=120)
+              fixture = subprocess.Popen(['node','scripts/browser-fixture/server.mjs'], stdin=subprocess.PIPE)
+              try:
+                  ready=False
+                  for _ in range(100):
+                      try:
+                          with urllib.request.urlopen('http://127.0.0.1:9334/json/version',timeout=.5): ready=True
+                          break
+                      except OSError: time.sleep(.2)
+                  assert ready, 'Browser fixture did not start'
+                  environment = dict(os.environ, DGIS_BROWSER_TEST_PORT='9334')
+                  subprocess.run([str(executable), '--smoke-test', '--result', str(report)], check=True, timeout=120, env=environment)
+              finally:
+                  fixture.communicate(b'stop',timeout=20)
               result = json.loads(report.read_text(encoding='utf-8'))
               assert result['ok'] and result['frozen']
               assert result['matched'] == 10 and result['xlsx_rows'] == 10
               assert result['credential_storage'] == 'passed'
+              assert result['tray_window'] == 'passed'
+              assert result['browser_cdp'] == 'passed'
               pathlib.Path('dist/validation.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
           digest = hashlib.sha256(executable.read_bytes()).hexdigest()
           pathlib.Path('dist/SHA256SUMS.txt').write_text(digest + '  ' + executable.name + '\n', encoding='ascii')
@@ -77,10 +92,10 @@ jobs:
           $notes = @'
           Windows 10/11 x64. Download only 2GIS-Business-Parser.exe and double-click it.
           No Docker, Python, Node.js or bundled browser is required. Your default browser opens automatically.
-          Close the small application window to stop the local server.
+          The application runs in the Windows tray. Use its menu to open the app or 2GIS, pause/resume a search, or exit. Closing the small control window hides it when the tray is available.
           Data is stored in %LOCALAPPDATA%\2GISBusinessParser. API keys are encrypted with Windows DPAPI.
-          The packaged EXE was tested: demo search, XLSX export, and encrypted credential storage.
-          A real 2GIS API key is required for live searches; live integration is not verified by the demo test.
+          The packaged EXE was tested: demo search, XLSX export, encrypted credential storage, and native tray window lifecycle.
+          Browser collection needs no API key and uses your installed Edge or Chrome. Enable it only within your separately obtained permission from 2GIS. CAPTCHA or an access restriction pauses the task for manual action; no bypass is included. The browser driver was tested against an isolated fixture with scrolling, card navigation and contact extraction.
           '@
           gh release create $tag --target '${{ github.sha }}' --title '2GIS Business Parser — Windows EXE' --notes $notes dist/2GIS-Business-Parser.exe dist/SHA256SUMS.txt dist/validation.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

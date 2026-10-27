@@ -153,7 +153,7 @@ class Geography(BaseModel):
 
 class SearchSpec(BaseModel):
     name: str = Field(default="Новый поиск", min_length=1, max_length=150)
-    mode: Literal["live", "demo"] = "live"
+    mode: Literal["live", "demo", "browser"] = "live"
     cities: list[Geography] = Field(min_length=1, max_length=20)
     categories: list[str] = Field(min_length=1, max_length=25)
     excluded_categories: list[str] = Field(default_factory=list, max_length=25)

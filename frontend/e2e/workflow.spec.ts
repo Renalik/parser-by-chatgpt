@@ -9,7 +9,7 @@ test("Подключение демо, мастер, таблица, экспо�
     page.getByRole("heading", { name: "Бизнес начинается с поиска." }),
   ).toBeVisible();
   await page.screenshot({ path: "/tmp/parser-dashboard.png", fullPage: true });
-  await page.getByRole("button", { name: "Настроить подключение" }).click();
+  await page.locator("nav").getByRole("button", { name: "Настройки" }).click();
   await page.getByRole("button", { name: "Открыть деморежим" }).click();
   await expect(page.getByText("Демо · тестовые данные")).toBeVisible();
   await page

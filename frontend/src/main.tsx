@@ -66,8 +66,12 @@ function App() {
   useEffect(() => {
     refresh().catch((e) => setNotice(e.message));
     const timer = setInterval(() => {
-      api("/jobs").then(setJobs).catch(() => {});
-      api("/meta").then(setMeta).catch(() => {});
+      api("/jobs")
+        .then(setJobs)
+        .catch(() => {});
+      api("/meta")
+        .then(setMeta)
+        .catch(() => {});
     }, 1500);
     return () => clearInterval(timer);
   }, [refresh]);
@@ -148,7 +152,13 @@ function App() {
             <Globe size={18} />
           </div>
           <div>
-            <b>{meta.mode === "demo" ? "Деморежим" : "Источник: 2ГИС"}</b>
+            <b>
+              {meta.mode === "demo"
+                ? "Деморежим"
+                : meta.mode === "browser"
+                  ? "2ГИС · браузер"
+                  : "Источник: 2ГИС"}
+            </b>
             <small>
               {meta.capabilities.connected
                 ? "Подключение активно"
@@ -177,9 +187,13 @@ function App() {
               <i className={meta.capabilities.connected ? "connected" : ""} />
               {meta.mode === "demo"
                 ? "Демо · тестовые данные"
-                : meta.capabilities.connected
-                  ? "API подключён"
-                  : "API не подключён"}
+                : meta.mode === "browser"
+                  ? meta.capabilities.connected
+                    ? "Браузер готов"
+                    : "Браузер не найден"
+                  : meta.capabilities.connected
+                    ? "API подключён"
+                    : "API не подключён"}
             </span>
             <button
               className="avatar"
@@ -196,7 +210,7 @@ function App() {
               <Info size={16} />
               Демонстрационный режим. Все организации — вымышленные примеры.
               <button onClick={() => setPage("Настройки")}>
-                Подключить API <ArrowRight size={14} />
+                Выбрать источник <ArrowRight size={14} />
               </button>
             </div>
           )}
@@ -281,7 +295,7 @@ function App() {
                     <KeyRound size={24} />
                   </div>
                   <div>
-                    <h3>Подключите данные. Найдите возможности.</h3>
+                    <h3>Выберите источник и начните поиск.</h3>
                     <p>
                       Добавьте ключ 2ГИС или познакомьтесь с приложением на
                       тестовых данных.

@@ -5,6 +5,7 @@ from . import database as db
 from .models import SearchSpec, Organization, now
 from .providers.demo import DemoProvider
 from .providers.dgis import DgisProvider
+from .providers.browser import BrowserProvider, capabilities
 from .providers.base import ProviderError
 from .filters import matches
 from .deduplication import dedup_key
@@ -16,14 +17,17 @@ class JobManager:
         self.tasks = {}
         self.key = settings.dgis_api_key
         self.caps = {}
-        self.mode = "live"
+        self.mode = "browser"
+        self.caps = capabilities()
 
     def provider(self, mode):
+        if mode == "browser":
+            return BrowserProvider()
         return DemoProvider() if mode == "demo" else DgisProvider(self.key, self.caps)
 
     def recover(self):
         for job in db.all_records("job"):
-            if job["mode"] == "live" and datetime.fromisoformat(
+            if job["mode"] in ("live", "browser") and datetime.fromisoformat(
                 job["created_at"]
             ) < datetime.now(timezone.utc) - timedelta(days=settings.retention_days):
                 db.delete(job["id"])
@@ -65,11 +69,16 @@ class JobManager:
         for task in self.tasks.values():
             task.cancel()
         await asyncio.gather(*self.tasks.values(), return_exceptions=True)
+        from .browser.driver import browser_service
+
+        await asyncio.to_thread(browser_service.close)
 
     async def run(self, id):
         job = db.get(id)
         spec = SearchSpec.model_validate(job["spec"])
         provider = self.provider(spec.mode)
+        if spec.mode == "browser":
+            provider.state = job.setdefault("browser_state", {})
         job["status"] = "running"
         job["message"] = ""
         db.put("job", id, job)
@@ -186,7 +195,7 @@ class JobManager:
         except asyncio.CancelledError:
             return
         except ProviderError as e:
-            job["status"] = "failed"
+            job["status"] = "paused" if e.paused else "failed"
             job["message"] = str(e)
         except Exception:
             job["status"] = "failed"
