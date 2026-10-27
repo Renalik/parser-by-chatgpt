@@ -218,7 +218,10 @@ class BrowserService:
 
     def open_home(self):
         tab = self.tab("search")
-        tab.navigate("https://2gis.ru")
+        current = tab.evaluate("location.href")
+        if current == "about:blank" or current.startswith(("chrome://newtab", "edge://newtab")):
+            tab.navigate("https://2gis.ru")
+        tab.call("Page.bringToFront")
         return {"opened": True}
 
     def close(self):

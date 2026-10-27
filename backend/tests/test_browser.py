@@ -133,3 +133,14 @@ def test_navigation_does_not_read_previous_card():
         tab, "https://2gis.ru/moscow/firm/200", "script", lambda d: d["ready"]
     )
     assert tab.reads == 2 and card["url"].endswith("/200")
+
+def test_open_browser_does_not_reset_active_search():
+    from backend.app.browser.driver import BrowserService
+    calls=[]
+    class Tab:
+        def evaluate(self,script):return 'https://2gis.ru/moscow/search/test'
+        def call(self,method):calls.append(method)
+        def navigate(self,url):raise AssertionError('Must preserve current search')
+    service=BrowserService();service.tab=lambda kind:Tab()
+    assert service.open_home()['opened']
+    assert calls==['Page.bringToFront']
